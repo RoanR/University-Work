@@ -1,7 +1,7 @@
 
 // Verilog stimulus file.
 //The Clock with a frequency of 40ns
-
+/*
 initial
   begin
     clk = 0; 
@@ -80,9 +80,14 @@ always @ (posedge busy) begin
   #40 req = 0; fake_req = 0;
 end
 
+always @ (posedge de_req) begin 
+  $fdisplay(,file_handle,"%b", de_nbyte);
+  if ((de_addr+1)%640 == 0) $fdisplay(file_handle,"\n");
+    
+end
+
 task test();
   begin
-
     //Setting Up
     de_ack = 1;
     #40 de_ack = 0;
@@ -109,4 +114,86 @@ initial
   $fclose(file_handle);
   #100 $finish;
 end
+*/
 
+`timescale 1ns/100ps
+
+module cell_automaton_tb ();
+  reg clk, req;
+  wire ack;
+  wire busy, de_req;
+  reg de_ack;
+  wire [17:0] de_addr;
+  wire  [3:0] de_nbyte;
+  wire [31:0] de_w_data;
+  integer file_handle; 
+  reg fake_req;
+  reg allow_memory;
+  reg [15:0] xs, ys, xe, ye;
+
+cell_automaton ca (clk, req, ack, busy, de_req, de_ack, de_addr, de_nbyte, de_w_data);
+
+//The Clock with a frequency of 40ns
+initial
+  begin
+    clk = 0; 
+    forever #20 clk = !clk; 
+$stop;
+end
+
+initial
+begin
+  #20000 $finish; 
+end
+
+//responding to de_req responses
+always @ (posedge de_req) begin
+    if(de_req === 1) begin
+      @(posedge clk);
+      while (de_req) begin
+        #40 de_ack = !de_ack;
+      end
+    end
+  de_ack = 0; 
+end 
+
+//Tests task, that runs a test
+task test();
+  begin
+    //Setting Up
+    de_ack = 1;
+    #40 de_ack = 0;
+    #40 allow_memory = 1; req = 1;
+    @(ack);
+    #40 req = 0;
+  end
+endtask
+
+always @ (posedge de_ack) begin
+  allow_memory = 1;
+end
+
+always @ (posedge de_req) begin 
+  $fdisplay(file_handle,"%b", de_nbyte);
+  if ((de_addr+1)%640 == 0) $fdisplay(file_handle,"\n");
+end
+
+//Driver Block for tests
+initial
+  begin
+  file_handle = $fopen("output.txt");
+  #100
+    @(posedge clk);
+    test();
+    @(negedge busy);
+    $stop;
+  $fclose(file_handle);
+  #100 $finish;
+end
+
+initial 
+begin
+  $dumpfile("cell_automaton_tb_results.vcd");
+  $dumpvars;
+end
+endmodule
